@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Implicit Image Gallery</title>
+  <style>
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background: #f7f7f8;
+      color: #222;
+    }
+
+    header {
+      padding: 32px 20px 22px;
+      text-align: center;
+      background: white;
+      border-bottom: 1px solid #e5e5e5;
+    }
+
+    header h1 {
+      margin: 0 0 10px;
+      font-size: 28px;
+    }
+
+    header p {
+      margin: 0;
+      color: #666;
+    }
+
+    main {
+      max-width: 1400px;
+      margin: auto;
+      padding: 22px;
+    }
+
+    #status {
+      color: #666;
+      margin-bottom: 18px;
+    }
+
+    .gallery {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+      gap: 18px;
+    }
+
+    .card {
+      background: white;
+      border: 1px solid #e5e5e5;
+      border-radius: 12px;
+      overflow: hidden;
+      cursor: pointer;
+      transition: transform .15s, box-shadow .15s;
+    }
+
+    .card:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 5px 18px #00000012;
+    }
+
+    .card img {
+      width: 100%;
+      height: 210px;
+      object-fit: contain;
+      background: #eee;
+      display: block;
+    }
+
+    .card-info {
+      padding: 12px;
+    }
+
+    .filename {
+      font-weight: 700;
+      overflow-wrap: anywhere;
+      margin-bottom: 7px;
+    }
+
+    .preview {
+      color: #666;
+      font-size: 13px;
+      line-height: 1.5;
+      display: -webkit-box;
+      -webkit-line-clamp: 3;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    dialog {
+      width: min(900px, 94vw);
+      max-height: 90vh;
+      border: 0;
+      border-radius: 14px;
+      padding: 0;
+      overflow: auto;
+    }
+
+    dialog::backdrop {
+      background: #000b;
+    }
+
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      padding: 14px 18px;
+      border-bottom: 1px solid #eee;
+    }
+
+    .modal-header button {
+      border: 0;
+      background: #eee;
+      border-radius: 8px;
+      padding: 8px 12px;
+      cursor: pointer;
+    }
+
+    #largeImage {
+      display: block;
+      max-width: 100%;
+      max-height: 55vh;
+      margin: 18px auto;
+      object-fit: contain;
+    }
+
+    .details {
+      padding: 0 22px 24px;
+      line-height: 1.65;
+      overflow-wrap: anywhere;
+    }
+
+    .details h3 {
+      margin-bottom: 4px;
+    }
+
+    .details p {
+      margin-top: 4px;
+      white-space: pre-wrap;
+    }
+
+    @media (max-width: 500px) {
+      main { padding: 12px; }
+      .gallery { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+      .card img { height: 150px; }
+      .card-info { padding: 9px; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Implicit Image Gallery</h1>
+    <p>Image collection · Captions · OCR text</p>
+  </header>
+
+  <main>
+    <div id="status">사진 데이터를 불러오는 중...</div>
+    <section id="gallery" class="gallery"></section>
+  </main>
+
+  <dialog id="viewer">
+    <div class="modal-header">
+      <strong id="modalFilename"></strong>
+      <button id="closeButton" type="button">닫기 ✕</button>
+    </div>
+    <img id="largeImage" alt="">
+    <div class="details">
+      <h3>사진 설명</h3>
+      <p id="caption"></p>
+      <h3>OCR 텍스트</h3>
+      <p id="ocrText"></p>
+    </div>
+  </dialog>
+
+  <script>
+    const gallery = document.getElementById("gallery");
+    const status = document.getElementById("status");
+    const viewer = document.getElementById("viewer");
+
+    function showText(id, value, fallback = "정보 없음") {
+      document.getElementById(id).textContent =
+        value && String(value).trim() ? value : fallback;
+    }
+
+    function openViewer(item) {
+      document.getElementById("modalFilename").textContent = item.name;
+      document.getElementById("largeImage").src =
+        "images/" + encodeURIComponent(item.name);
+      document.getElementById("largeImage").alt = item.name;
+      showText("caption", item.caption);
+      showText("ocrText", item.ocr_text);
+      viewer.showModal();
+    }
+
+    document.getElementById("closeButton").addEventListener("click", () => {
+      viewer.close();
+    });
+
+    viewer.addEventListener("click", (event) => {
+      if (event.target === viewer) viewer.close();
+    });
+
+    async function loadGallery() {
+      try {
+        const response = await fetch("data.json");
+
+        if (!response.ok) {
+          throw new Error("data.json을 불러오지 못했습니다.");
+        }
+
+        const items = await response.json();
+        const fragment = document.createDocumentFragment();
+
+        for (const item of items) {
+          const card = document.createElement("article");
+          card.className = "card";
+          card.tabIndex = 0;
+
+          const img = document.createElement("img");
+          img.src = "images/" + encodeURIComponent(item.name);
+          img.alt = item.name;
+          img.loading = "lazy";
+
+          const info = document.createElement("div");
+          info.className = "card-info";
+
+          const filename = document.createElement("div");
+          filename.className = "filename";
+          filename.textContent = item.name;
+
+          const preview = document.createElement("div");
+          preview.className = "preview";
+          preview.textContent = item.caption || item.ocr_text || "설명 없음";
+
+          img.addEventListener("error", () => {
+            img.alt = "이미지를 불러올 수 없습니다: " + item.name;
+          });
+
+          card.addEventListener("click", () => openViewer(item));
+          card.addEventListener("keydown", (event) => {
+            if (event.key === "Enter" || event.key === " ") {
+              event.preventDefault();
+              openViewer(item);
+            }
+          });
+
+          info.append(filename, preview);
+          card.append(img, info);
+          fragment.append(card);
+        }
+
+        gallery.append(fragment);
+        status.textContent = `총 ${items.length.toLocaleString()}장의 사진`;
+      } catch (error) {
+        status.textContent =
+          "데이터를 불러오지 못했습니다. GitHub Pages에 data.json이 있는지 확인하세요.";
+        console.error(error);
+      }
+    }
+
+    loadGallery();
+  </script>
+</body>
+</html>
